@@ -58,6 +58,7 @@ import {homeConfig} from "@/config/index.js";
     align-items: center;
     justify-content: flex-start;
     flex-grow: 1;
+    width: 100%;
 
     .title {
         font-size: 2.5rem;
@@ -81,7 +82,7 @@ import {homeConfig} from "@/config/index.js";
         display: flex;
         flex-direction: column;
         justify-items: flex-start;
-        width: 50%;
+        width: 75%;
 
         hr {
             margin: .5rem 0;

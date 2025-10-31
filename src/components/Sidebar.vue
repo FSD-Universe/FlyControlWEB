@@ -6,7 +6,7 @@ import {
     HomeFilled,
     MapLocation,
     Moon,
-    Operation,
+    Operation, Picture,
     Setting,
     Sunny,
     UserFilled
@@ -99,6 +99,18 @@ onMounted(() => {
                 <MapLocation/>
             </el-icon>
             <span>在线地图</span>
+        </el-menu-item>
+        <el-menu-item index="/charts">
+            <el-icon>
+                <Picture/>
+            </el-icon>
+            <span>航图查询</span>
+        </el-menu-item>
+        <el-menu-item index="/weather">
+            <el-icon>
+                <Sunny/>
+            </el-icon>
+            <span>气象报文查询</span>
         </el-menu-item>
         <el-menu-item index="/ticket">
             <el-icon>

@@ -48,8 +48,11 @@ onMounted(() => {
             <el-sub-menu index="/tools">
                 <template #title>实用工具</template>
                 <el-menu-item>
-                    <a href="https://eaip.half-nothing.cn/index.html" target="_blank">中国EAIP镜像站</a>
+                    <a :href="homeConfig.content.eaip_mirror_url" target="_blank">中国EAIP镜像站</a>
                 </el-menu-item>
+<!--                <el-menu-item>-->
+<!--                    <a :href="homeConfig.content.chart_mirror_url" target="_blank">航图查询</a>-->
+<!--                </el-menu-item>-->
                 <el-menu-item index="/metar">
                     气象报文查询
                 </el-menu-item>
@@ -96,7 +99,7 @@ onMounted(() => {
                 <el-menu-item class="no-hover">
                     <PersonCard :expend="false" style="cursor: pointer;" v-if="userStore.isLogin"
                                 @click.stop.prevent="router.push('/profile')"/>
-                    <el-space>
+                    <el-space v-else>
                         <el-button type="primary" @click="router.push('/register')">注册</el-button>
                         <el-button type="success" @click="router.push('/login')">登录</el-button>
                     </el-space>

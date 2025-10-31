@@ -59,8 +59,8 @@ const queryMetar = async () => {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    width: 80%;
-    flex-grow: 1;
+    width: 100%;
+    flex: 1;
 
     p {
         font-size: 1.05rem;
@@ -105,7 +105,7 @@ const queryMetar = async () => {
 @media (max-width: 600px) {
     .container {
         .content {
-            width: 80%;
+            width: 100%;
         }
     }
 }

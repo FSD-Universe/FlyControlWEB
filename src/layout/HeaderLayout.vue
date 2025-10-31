@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Header from "@/components/Header.vue";
 import Footer from "@/components/Footer.vue";
-import {useReactiveWidth} from "@/composables/useReactiveWidth.js";
+import {useMediaQuery} from "@vueuse/core";
 
-const {less800px} = useReactiveWidth();
+const less560px = useMediaQuery("(max-width: 560px)");
 </script>
 
 <template>
@@ -13,9 +13,9 @@ const {less800px} = useReactiveWidth();
         </el-header>
         <el-main class="main">
             <router-view></router-view>
-            <Footer v-if="less800px"/>
+            <Footer v-if="less560px"/>
         </el-main>
-        <el-footer class="flex align-items-center" v-if="!less800px">
+        <el-footer class="flex align-items-center" v-if="!less560px">
             <Footer/>
         </el-footer>
     </el-container>
@@ -54,5 +54,6 @@ const {less800px} = useReactiveWidth();
     display: flex;
     width: 100%;
     flex-direction: column;
+    align-items: center;
 }
 </style>

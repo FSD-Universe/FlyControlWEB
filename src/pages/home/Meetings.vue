@@ -24,7 +24,8 @@ import {homeConfig} from "@/config/index.js";
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    flex-grow: 1;
+    flex: 1;
+    width: 100%;
 
     .title {
         font-size: 2.5rem;
@@ -36,6 +37,14 @@ import {homeConfig} from "@/config/index.js";
     .el-table {
         width: 60%;
         font-size: large;
+    }
+}
+
+@media (max-width: 1000px) {
+    .container {
+        .el-table {
+            width: 100%;
+        }
     }
 }
 </style>

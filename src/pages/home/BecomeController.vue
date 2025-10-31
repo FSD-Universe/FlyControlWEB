@@ -40,7 +40,7 @@ const router = useRouter();
     align-items: center;
     justify-content: flex-start;
     flex-grow: 1;
-    width: 60%;
+    width: 100%;
 
     p {
         font-size: 1.05rem;
@@ -71,6 +71,14 @@ const router = useRouter();
 
         > * {
             margin: 5px 0;
+        }
+    }
+}
+
+@media (max-width: 1000px) {
+    .container {
+        .content {
+            width: 100%;
         }
     }
 }

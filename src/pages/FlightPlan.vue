@@ -629,6 +629,7 @@ const handleAlternateSelect = (airport: Airport) => {
         <el-alert v-if="flightPlanLocked" type="error" :closable="false" show-icon>
             <p>请注意，您的飞行计划已锁定</p>
             <p>您可以提交一份起落机场不同的飞行计划来自动解锁</p>
+            <p>或者断开与服务器的连接超过40s</p>
             <p>或者联系管理员帮你解锁</p>
         </el-alert>
         <el-form label-position="top" :rules="flightPlanFormRule" :model="flightPlanFormData" ref="flightPlanFormRef">

@@ -66,6 +66,8 @@ type HomeConfig = {
         copyright: string;
         bilibili_name: string;
         bilibili_uid: number;
+        eaip_mirror_url: string;
+        chart_mirror_url: string;
         teamspeak_server: string;
         teamspeak_server_password: string;
         qq_group_name: string;

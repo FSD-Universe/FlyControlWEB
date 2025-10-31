@@ -21,7 +21,6 @@ import {Global} from "@/global.js";
 
 <style scoped>
 .footer {
-    flex-grow: 1;
     display: flex;
     border: none;
     font-size: var(--el-font-size-base);
@@ -29,5 +28,6 @@ import {Global} from "@/global.js";
     align-items: center;
     padding: 0 5px;
     text-align: center;
+    width: 100%;
 }
 </style>

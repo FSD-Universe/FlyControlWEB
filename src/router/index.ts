@@ -39,6 +39,8 @@ import FlightPlan from "@/pages/FlightPlan.vue";
 import FlightPlanList from "@/pages/admin/FlightPlanList.vue";
 import Announcement from "@/pages/admin/Announcement.vue";
 import ForgotPassword from "@/pages/user/ForgotPassword.vue";
+import Charts from "@/pages/Charts.vue";
+import Weather from "@/pages/Weather.vue";
 
 const isController = (userData: UserModel): boolean => {
     return userData.rating >= ratings.Observer;
@@ -197,6 +199,24 @@ const routes: RouteRecordRaw[] = [
                 meta: {
                     requireAuth: true,
                     title: "在线地图"
+                }
+            },
+            {
+                path: "/charts",
+                name: "Charts",
+                component: Charts,
+                meta: {
+                    requireAuth: true,
+                    title: "航图查询"
+                }
+            },
+            {
+                path: "/weather",
+                name: "Weather",
+                component: Weather,
+                meta: {
+                    requireAuth: true,
+                    title: "气象报文查询"
                 }
             },
             {

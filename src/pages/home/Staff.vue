@@ -63,13 +63,13 @@ onMounted(() => {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    width: 80%;
-    flex-grow: 1;
+    width: 100%;
+    flex: 1;
 
     .content {
         display: flex;
         flex-direction: column;
-        width: 60%;
+        width: 80%;
     }
 
     .title {
@@ -105,6 +105,14 @@ onMounted(() => {
     p {
         font-size: 1.05rem;
         line-height: 1.75;
+    }
+}
+
+@media (max-width: 425px) {
+    .container {
+        .content {
+            width: 100%;
+        }
     }
 }
 </style>

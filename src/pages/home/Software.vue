@@ -60,7 +60,7 @@ const jumpToUrl = (url: string) => {
     align-items: center;
     justify-content: flex-start;
     flex-grow: 1;
-    width: 80%;
+    width: 100%;
 
     p {
         font-size: 1.05rem;

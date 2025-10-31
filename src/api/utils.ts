@@ -19,6 +19,20 @@ export namespace Api {
         return response.data;
     }
 
+    export const sendProxyRequest = async (url: string, blob: boolean = false): Promise<any> => {
+        let response;
+        if (blob) {
+            response = await request.get(`/charts/${url}`, {responseType: "blob", timeout: 30000}) as AxiosXHR<any>;
+        } else {
+            response = await request.get(`/charts/${url}`) as AxiosXHR<any>;
+        }
+        return response.data;
+    }
+
+    export const getAirportChartsIndex = async (icao: string): Promise<{ charts: AirportChartIndex[] }> => {
+        return sendProxyRequest(`https://charts.api-v2.navigraph.com/charts/${icao.toUpperCase()}?version=STD`)
+    }
+
     export const getAuditLogs = async <T>(page: number, pageSize: number): Promise<Nullable<PageDataResponse<AuditLogModel>>> => {
         return getPageData<AuditLogModel>("/audits", page, pageSize);
     }
