@@ -1,0 +1,11 @@
+.idea/
+.git/
+dist/
+node_modules/
+.gitignore
+auto-imports.d.ts
+CODE_OF_CONDUCT.md
+components.d.ts
+LICENSE
+main.py
+README.md
