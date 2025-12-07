@@ -1,6 +1,6 @@
 export const Global = {
-    version: "0.9.0",
-    whatsNew: "<p>1、完成航图查询功能</p><p>2、优化气象报文查询功能</p><p>3、部分bug修复</p>",
+    version: "0.9.1",
+    whatsNew: "<p>1.为在线地图添加飞服范围显示</p><p>2.修复在线地图刷新频闪问题</p><p>3.修复在线地图在线列表顺序不固定问题</p><p>4.对管制员申请添加30小时的联飞时长限制</p><p>5.其他bug修复</p>",
     controllerRecordTypes: [
         {
             label: "面试",

@@ -24,8 +24,9 @@ const router = useRouter();
                 <el-checkbox label="eAIP航图识读能力" value="6"/>
                 <el-checkbox label="了解RVSM高度层" value="7"/>
                 <el-checkbox label="了解飞行情报区及空域的运行规范" value="8"/>
+                <el-checkbox label="拥有至少30小时的连线飞行时间" value="9"/>
             </el-checkbox-group>
-            <el-button type="primary" round dark size="large" :disabled="checkedList.length != 8"
+            <el-button type="primary" round dark size="large" :disabled="checkedList.length != 9"
                        @click="router.push('/controllers/application')">
                 立刻申请
             </el-button>

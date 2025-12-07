@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {FormInstance, FormRules} from "element-plus";
 import {CircleCheck, CircleClose, Clock, EditPen, List} from "@element-plus/icons-vue";
-import {onMounted, onUnmounted, ref, Ref} from "vue";
+import {computed, onMounted, onUnmounted, ref, Ref} from "vue";
 import {useRouter} from "vue-router";
 
 import ApiController from "@/api/controller.js";
@@ -89,6 +89,18 @@ const applicationFormRule: Ref<FormRules> = ref({
 });
 const imageUploadRef: Ref<ImageUploadInterface> = ref();
 const submitApplicationLoading = ref(false);
+const haveEnoughFlightTime = computed(() => {
+    return userStore.userData.total_pilot_time >= 30 * 3600;
+})
+
+const openApplicationDialog = () => {
+    if (!haveEnoughFlightTime.value) {
+        showError("您的联飞时长不足，申请管制员需要至少30小时的连线飞行时间");
+        return;
+    }
+    application.value = null;
+    applicationDialogRef.value?.show();
+}
 
 const submitControllerApplication = async () => {
     submitApplicationLoading.value = true;
@@ -155,7 +167,7 @@ const {less400px} = useReactiveWidth();
                 <el-step title="很遗憾, 您的申请未通过" v-if="application?.status == ApplicationStatus.Rejected"
                          :icon="CircleClose" status="error">
                     <template #description>
-                        <el-button type="primary" round @click="application = null; applicationDialogRef?.show()">
+                        <el-button type="primary" round @click="openApplicationDialog()">
                             重新提交申请
                         </el-button>
                     </template>
@@ -164,7 +176,7 @@ const {less400px} = useReactiveWidth();
             <el-space :class="{'justify-content-center': !less400px}"
                       v-if="application?.status < ApplicationStatus.Passed">
                 <el-button type="danger" round @click="confirmCancelDialogRef?.show()">取消申请</el-button>
-                <el-button type="primary" round @click="application = null; applicationDialogRef?.show()"
+                <el-button type="primary" round @click="openApplicationDialog()"
                            v-if="less400px && application?.status == ApplicationStatus.Rejected">
                     重新提交申请
                 </el-button>
@@ -172,7 +184,7 @@ const {less400px} = useReactiveWidth();
             <ApplicationDescription :application="application"/>
         </el-space>
         <el-empty v-else description="看来你还没有提交过管制员申请">
-            <el-button type="primary" @click="applicationDialogRef?.show()">立刻提交</el-button>
+            <el-button type="primary" @click="openApplicationDialog()">立刻提交</el-button>
         </el-empty>
     </el-card>
     <FormDialog ref="applicationDialogRef" title="提交管制员申请" :width="800"

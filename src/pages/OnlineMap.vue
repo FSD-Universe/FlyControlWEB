@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, onMounted, onUnmounted, watch, Ref} from 'vue';
+import {computed, onMounted, onUnmounted, ref, Ref, watch} from 'vue';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -8,12 +8,11 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import {fromLonLat} from 'ol/proj';
-import {Style, Icon, Stroke, Fill, Circle} from 'ol/style';
+import {fromLonLat, transformExtent} from 'ol/proj';
+import {Circle, Fill, Icon, Stroke, Style} from 'ol/style';
 import Overlay from 'ol/Overlay';
 import axios from "axios";
 import 'ol/ol.css';
-import AxiosXHR = Axios.AxiosXHR;
 import {Layer} from "ol/layer.js";
 import {showError} from "@/utils/message.js";
 import {LineString} from "ol/geom.js";
@@ -25,14 +24,18 @@ import VectorTileSource from 'ol/source/VectorTile.js';
 import {TileGrid} from "ol/tilegrid.js";
 import {applyStyle} from 'ol-mapbox-style';
 import config from "@/config/index.js";
-import {XYZ} from "ol/source.js";
+import {ImageStatic, Source, XYZ} from "ol/source.js";
 import {Cloudy, Expand} from "@element-plus/icons-vue";
 import {formatCid} from "@/utils/utils.js";
 import {useServerConfigStore} from "@/store/server_config.js";
 import {useToggle} from "@vueuse/core";
 import ApiClient from "@/api/client.js";
+import {useUserStore} from "@/store/user.js";
+import AxiosXHR = Axios.AxiosXHR;
+import ImageLayer from "ol/layer/Image.js";
 
 const serverConfigStore = useServerConfigStore();
+const userStore = useUserStore();
 
 const showDetailList = ref(false);
 const toggleDetailList = useToggle(showDetailList);
@@ -131,16 +134,32 @@ watch(() => selectedLayer.value, (value: string, oldValue: string) => {
     }
 })
 
-const onlineData: Ref<OnlineClientModel> = ref({
-    general: {},
-    pilots: [],
-    controllers: []
-});
+const onlinePilots: Map<string, OnlinePilotModel> = new Map();
+const onlineController: Map<string, OnlineControllerModel> = new Map();
 
 const fetchWhazzupData = async () => {
     const data = await ApiClient.getOnlineClient();
     if (data != null) {
-        onlineData.value = data;
+        const pilots = new Set();
+        data.pilots.forEach(pilot => {
+            pilots.add(pilot.callsign)
+            onlinePilots.set(pilot.callsign, pilot)
+        });
+        onlinePilots.forEach(pilot => {
+            if (!pilots.has(pilot.callsign)) {
+                onlinePilots.delete(pilot.callsign)
+            }
+        });
+        const controllers = new Set();
+        data.controllers.forEach(controller => {
+            controllers.add(controller.callsign)
+            onlineController.set(controller.callsign, controller)
+        });
+        onlineController.forEach(controller => {
+            if (!controllers.has(controller.callsign)) {
+                onlineController.delete(controller.callsign)
+            }
+        });
     }
 }
 
@@ -201,52 +220,177 @@ const createStyle = (heading: number): Style => {
     });
 }
 
-const flushMapShow = () => {
-    onlineData.value.pilots.forEach(pilot => {
-        const feature = new Feature({
-            geometry: new Point(fromLonLat([pilot.longitude, pilot.latitude])),
-            isPilot: true,
-            cid: formatCid(pilot.cid),
-            callsign: pilot.callsign,
-            flightPlan: pilot.flight_plan,
-            groundSpeed: pilot.ground_speed,
-            altitude: pilot.altitude,
-            transponder: pilot.transponder
-        });
+const updatePilotInfo = (pilot: OnlinePilotModel, feature: Feature) => {
+    if (!feature || !pilot) {
+        return
+    }
+    feature.set('cid', formatCid(pilot.cid));
+    feature.set('flightPlan', pilot.flight_plan);
+    feature.set('groundSpeed', pilot.ground_speed);
+    feature.set('altitude', pilot.altitude);
+    feature.set('transponder', pilot.transponder);
+    feature.setStyle(createStyle(pilot.heading));
+}
 
-        feature.setStyle(createStyle(pilot.heading));
-        aircraftLayer.getSource().addFeature(feature);
+const updateControllerInfo = (controller: OnlineControllerModel, feature: Feature) => {
+    if (!feature || !controller) {
+        return
+    }
+    feature.set("callsign", controller.callsign);
+    feature.set("frequency", controller.frequency);
+    feature.set("atis", controller.atc_info);
+    feature.set("cid", controller.cid);
+    feature.set("offline_time", controller.offline_time);
+    feature.set("is_break", controller.is_break);
+}
+
+const flushMapShow = () => {
+    const currentPilots = new Set();
+    const currentControllers = new Set();
+
+    // 处理飞行员数据
+    onlinePilots.values().forEach(pilot => {
+        const pilotId = `${pilot.callsign}-${pilot.cid}`;
+        currentPilots.add(pilotId);
+        let feature = aircraftLayer.getSource().getFeatureById(pilotId);
+
+        if (!feature) {
+            feature = new Feature({
+                geometry: new Point(fromLonLat([pilot.longitude, pilot.latitude])),
+                isPilot: true,
+                cid: formatCid(pilot.cid),
+                callsign: pilot.callsign,
+                flightPlan: pilot.flight_plan,
+                groundSpeed: pilot.ground_speed,
+                altitude: pilot.altitude,
+                transponder: pilot.transponder
+            });
+            feature.setId(pilotId);
+            feature.setStyle(createStyle(pilot.heading));
+            aircraftLayer.getSource().addFeature(feature);
+            return;
+        }
+        const geometry = feature.getGeometry();
+        if (geometry instanceof Point) {
+            geometry.setCoordinates(fromLonLat([pilot.longitude, pilot.latitude]));
+        }
+        updatePilotInfo(pilot, feature);
     });
-    onlineData.value.controllers.forEach(controller => {
+
+    const existingPilotFeatures = aircraftLayer.getSource().getFeatures();
+    existingPilotFeatures.forEach(feature => {
+        if (feature.get('isPilot')) {
+            const pilotId = feature.getId();
+            if (!currentPilots.has(pilotId)) {
+                aircraftLayer.getSource().removeFeature(feature);
+            }
+        }
+    });
+
+    onlineController.values().forEach(controller => {
+        const controllerId = `${controller.callsign}-${controller.cid}`;
+        currentControllers.add(controllerId);
+        let feature: Nullable<Feature> = null;
+        let source: Nullable<Source> = null;
+        let baseFeature: Nullable<Feature> = null;
+        const hasBorder = controller.facility == 6 || controller.facility == 5 || controller.facility == 1;
+
+        switch (controller.facility) {
+            case 6: {
+                source = centerLayer.getSource();
+                feature = source.getFeatureById(controllerId);
+                const sector = controller.callsign.replace("_CTR", "").replaceAll("_", "-");
+                if (sector.startsWith("HKG-W")) {
+                    baseFeature = centerFeatureMap.get("VHHK")?.clone()
+                    break;
+                }
+                baseFeature = centerFeatureMap.get(sector)?.clone()
+                break;
+            }
+            case 5: {
+                source = approachLayer.getSource();
+                feature = source.getFeatureById(controllerId);
+                const tmp = controller.callsign.split("_");
+                const callsign = tmp.slice(0, tmp.length - 1);
+                baseFeature = approachFeatureMap.get(join(callsign, '_'))?.clone()
+                break;
+            }
+            case 4:
+            case 3:
+            case 2:
+                source = towerLayer.getSource();
+                feature = source.getFeatureById(controllerId);
+                break;
+            case 1:
+                source = centerLayer.getSource();
+                feature = source.getFeatureById(controllerId);
+                if (controller.callsign.toUpperCase() === "PRC_FSS") {
+                    baseFeature = centerFeatureMap.get("PRC")?.clone()
+                }
+                break;
+            default:
+                // 不是合法管制员，不显示在地图上
+                return
+        }
+
+        if (!feature && !baseFeature && hasBorder) {
+            // 无实体且没找到对应边界实体
+            return;
+        }
+
         if (controller.facility == 1) {
-            // FSS
-        } else if (controller.facility == 6) {
+            if (feature) {
+                updateControllerInfo(controller, feature)
+                return;
+            }
+            feature = baseFeature;
+            feature.setId(controllerId);
+            feature.set("isPilot", false);
+            updateControllerInfo(controller, feature)
+            source.addFeature(feature);
+            return;
+        }
+
+        if (controller.facility == 6) {
             // CTR
-            const tmp = controller.callsign.split("_");
-            const callsign = tmp.slice(0, tmp.length - 1);
-            const feature = centerFeatureMap.get(join(callsign, '-'))?.clone()
-            feature?.set("isPilot", false)
-            feature?.set("callsign", controller.callsign)
-            feature?.set("frequency", controller.frequency)
-            feature?.set("atis", controller.atc_info)
-            feature?.set("cid", controller.cid)
-            centerLayer.getSource().addFeature(feature);
-        } else if (controller.facility == 5) {
+            if (feature && baseFeature) {
+                updateControllerInfo(controller, feature)
+                return;
+            }
+            feature = baseFeature;
+            feature.setId(controllerId);
+            feature.set("isPilot", false);
+            updateControllerInfo(controller, feature)
+            source.addFeature(feature);
+            return;
+        }
+
+        if (controller.facility == 5) {
             // APP
-            const tmp = controller.callsign.split("_");
-            const callsign = tmp.slice(0, tmp.length - 1);
-            const feature = approachFeatureMap.get(join(callsign, '_'))?.clone()
-            feature?.set("isPilot", false)
-            feature?.set("callsign", controller.callsign)
-            feature?.set("frequency", controller.frequency)
-            feature?.set("offline_time", controller.offline_time)
-            feature?.set("is_break", controller.is_break)
-            feature?.set("atis", controller.atc_info)
-            feature?.set("cid", controller.cid)
-            approachLayer.getSource().addFeature(feature);
-        } else if (controller.facility >= 2 && controller.facility <= 4) {
+            if (feature) {
+                updateControllerInfo(controller, feature)
+                return;
+            }
+
+            feature = baseFeature;
+            feature.setId(controllerId);
+            feature.set("isPilot", false);
+            updateControllerInfo(controller, feature)
+            source.addFeature(feature);
+            return;
+        }
+
+        if (controller.facility >= 2 && controller.facility <= 4) {
             // TWR GND DEL
-            const feature = new Feature({
+            if (feature) {
+                const geometry = feature.getGeometry();
+                if (geometry instanceof Point) {
+                    geometry.setCoordinates(fromLonLat([controller.longitude, controller.latitude]));
+                }
+                updateControllerInfo(controller, feature);
+                return;
+            }
+            feature = new Feature({
                 geometry: new Point(fromLonLat([controller.longitude, controller.latitude])),
                 isPilot: false,
                 callsign: controller.callsign,
@@ -256,11 +400,72 @@ const flushMapShow = () => {
                 atis: controller.atc_info,
                 cid: formatCid(controller.cid)
             });
-            towerLayer.getSource().addFeature(feature);
+            feature.setId(controllerId);
+            feature.setStyle(new Style({
+                image: new Circle({
+                    radius: 6,
+                    fill: new Fill({
+                        color: '#c8504e'
+                    })
+                })
+            }));
+            source.addFeature(feature);
         }
-    })
+    });
+
+    [centerLayer, approachLayer, towerLayer].forEach(layer => {
+        const source = layer.getSource();
+        const features = source.getFeatures();
+        features.forEach(feature => {
+            if (!feature.get('isPilot')) {
+                const controllerId = feature.getId();
+                if (!currentControllers.has(controllerId)) {
+                    source.removeFeature(feature);
+                }
+            }
+        });
+    });
 }
 
+// const calculateAdjustedExtent = (data: BoundingBox, width: number, height: number) => {
+//     if (data.latlng == undefined) {
+//         throw new Error("Latitude and longitude are not provided");
+//     }
+//     const diffX = Math.abs(data.pixels.x2 - data.pixels.x1);
+//     const diffY = Math.abs(data.pixels.y1 - data.pixels.y2);
+//
+//     const lonPerPixel = Math.abs(data.latlng.lng2 - data.latlng.lng1) / diffX;
+//     const latPerPixel = Math.abs(data.latlng.lat1 - data.latlng.lat2) / diffY;
+//
+//     data.latlng.lng1 = data.latlng.lng1 - lonPerPixel * data.pixels.x1;
+//     data.latlng.lat1 = data.latlng.lat1 - latPerPixel * (height - data.pixels.y1);
+//     data.latlng.lng2 = data.latlng.lng2 + lonPerPixel * (width - data.pixels.x2);
+//     data.latlng.lat2 = data.latlng.lat2 + lonPerPixel * data.pixels.y2;
+//
+//     return transformExtent([
+//         data.latlng.lng1, data.latlng.lat1,
+//         data.latlng.lng2, data.latlng.lat2
+//     ], 'EPSG:4326', 'EPSG:3857');
+// }
+
+// const bound = {
+//     "pixels": {
+//         "x1": 103,
+//         "y1": 2048,
+//         "x2": 2535,
+//         "y2": 168
+//     },
+//     "latlng": {
+//         "lng1": 112.99008333333333,
+//         "lat1": 23.12922222222222,
+//         "lng2": 114.36927777777778,
+//         "lat2": 24.111416666666667
+//     }
+// };
+// const w = 2623;
+// const h = 2153;
+
+// let imageLayer = null;
 // 初始化地图
 onMounted(async () => {
     if (!mapContainer.value) return;
@@ -372,12 +577,40 @@ onMounted(async () => {
         })
     })
 
+    // const imageSource = new ImageStatic({
+    //     url: `${config.backend_url}/charts/https://api.navigraph.com/v2/charts/ZGGG/zggg116a_d.png`,
+    //     imageExtent: calculateAdjustedExtent(bound, w, h),
+    //     crossOrigin: 'anonymous',
+    //     imageLoadFunction: function (image, src) {
+    //         const xhr = new XMLHttpRequest();
+    //         xhr.open('GET', src);
+    //
+    //         xhr.setRequestHeader('Authorization', 'Bearer ' + userStore.token);
+    //
+    //         xhr.responseType = 'blob';
+    //         xhr.onload = function () {
+    //             if (xhr.status === 200) {
+    //                 const blob = xhr.response;
+    //                 image.getImage().src = URL.createObjectURL(blob);
+    //             }
+    //         };
+    //         xhr.send();
+    //     }
+    // });
+    //
+    // imageLayer = new ImageLayer({
+    //     source: imageSource,
+    //     visible: true,
+    //     opacity: 0.7
+    // });
+
     map.value.addLayer(centerLayer);
     map.value.addLayer(approachLayer);
     map.value.addLayer(weatherLayer);
     map.value.addLayer(lineLayer);
     map.value.addLayer(aircraftLayer);
     map.value.addLayer(towerLayer);
+    // map.value.addLayer(imageLayer);
 
     // 初始化弹出框
     initializePopup();
@@ -391,10 +624,6 @@ onMounted(async () => {
     flushMapShow()
 
     interval = setInterval(async () => {
-        aircraftLayer.getSource().clear();
-        centerLayer.getSource().clear();
-        approachLayer.getSource().clear();
-        towerLayer.getSource().clear();
         await fetchWhazzupData();
         flushMapShow()
     }, 15000)
@@ -441,8 +670,8 @@ const initializePopup = () => {
 
     popup.value = new Overlay({
         element: popupElement,
-        positioning: 'bottom-center',
-        offset: [0, 0],
+        positioning: 'top-right',
+        offset: [-10, 0],
         autoPan: {
             animation: {
                 duration: 250
@@ -508,13 +737,13 @@ const showPopup = (feature: Feature, coordinate: number[]) => {
             <p>地速：${groundSpeed}kt</p>
             <p>高度：${altitude}ft</p>
           `;
-        if (flightPlan != null) {
+        if (flightPlan) {
             content += `
-            <p>出发机场: ${flightPlan.departure}</p>
-            <p>到达机场: ${flightPlan.arrival}</p>
+                <p>出发机场: ${flightPlan.departure}</p>
+                <p>到达机场: ${flightPlan.arrival}</p>
             `;
         } else {
-            content += `<p>无飞行计划</p>`
+            content += `<p>平等的看不起任何不交计划的人</p>`
         }
         popupContent.value = content;
     } else {
@@ -582,7 +811,7 @@ onUnmounted(() => {
         </div>
         <Transition name="online">
             <div class="left-box" v-if="showDetailList">
-                <el-table :data="onlineData.pilots" height="100%" class="data-table">
+                <el-table :data="onlinePilots.values().toArray()" height="100%" class="data-table">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
@@ -605,7 +834,7 @@ onUnmounted(() => {
         </Transition>
         <Transition name="online">
             <div class="right-box" v-if="showDetailList">
-                <el-table :data="onlineData.controllers" height="100%" class="data-table">
+                <el-table :data="onlineController.values().toArray()" height="100%" class="data-table">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
@@ -750,9 +979,8 @@ onUnmounted(() => {
     padding: 15px;
     border-radius: 10px;
     border: 1px solid #ccc;
-    bottom: 12px;
-    left: -50px;
     min-width: 200px;
+    box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .ol-popup-closer {

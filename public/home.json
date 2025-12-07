@@ -37,6 +37,18 @@
         }
     ],
     "software": [
+        {
+            "name": "Swift",
+            "platform": {
+                "windows": true,
+                "linux": false,
+                "macos": false
+            },
+            "description": "虚拟空中交通模拟网络的客户端，支持众多模拟器和操作系统",
+            "version": "0.15.26",
+            "file_url": "",
+            "official_uri": "/asdasd"
+        }
     ],
     "staff": {
         "staffers": {
