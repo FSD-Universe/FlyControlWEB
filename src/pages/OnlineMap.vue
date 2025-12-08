@@ -172,6 +172,7 @@ let aircraftLayer: Layer;
 let centerSource: VectorSource;
 const centerFeatureMap: Map<string, Feature> = new Map();
 let centerLayer: Layer;
+let fssLayer: Layer;
 let approachSource: VectorSource;
 const approachFeatureMap: Map<string, Feature> = new Map();
 let approachLayer: Layer;
@@ -326,7 +327,7 @@ const flushMapShow = () => {
                 feature = source.getFeatureById(controllerId);
                 break;
             case 1:
-                source = centerLayer.getSource();
+                source = fssLayer.getSource();
                 feature = source.getFeatureById(controllerId);
                 if (controller.callsign.toUpperCase() === "PRC_FSS") {
                     baseFeature = centerFeatureMap.get("PRC")?.clone()
@@ -417,7 +418,7 @@ const flushMapShow = () => {
         }
     });
 
-    [centerLayer, approachLayer, towerLayer].forEach(layer => {
+    [fssLayer, centerLayer, approachLayer, towerLayer].forEach(layer => {
         const source = layer.getSource();
         const features = source.getFeatures();
         features.forEach(feature => {
@@ -519,6 +520,19 @@ onMounted(async () => {
         centerFeatureMap.set(feature.get("id") as string, feature)
     })
 
+    fssLayer = new VectorLayer({
+        source: new VectorSource(),
+        style: new Style({
+            stroke: new Stroke({
+                color: config.atc_border,
+                width: 2
+            }),
+            fill: new Fill({
+                color: config.atc_fill
+            })
+        })
+    })
+
     centerLayer = new VectorLayer({
         source: new VectorSource(),
         style: new Style({
@@ -608,6 +622,7 @@ onMounted(async () => {
     //     opacity: 0.7
     // });
 
+    map.value.addLayer(fssLayer);
     map.value.addLayer(centerLayer);
     map.value.addLayer(approachLayer);
     map.value.addLayer(weatherLayer);
