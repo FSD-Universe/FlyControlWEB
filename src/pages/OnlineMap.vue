@@ -732,13 +732,13 @@ const showPopup = (feature: Feature, coordinate: number[]) => {
         let content = `
             <h3>${callsign}</h3>
             <p>${formatCid(cid)}</p>
-            <p>机型: ${flightPlan.aircraft.split("-")[0]}</p>
             <p>应答机: ${transponder}</p>
             <p>地速：${groundSpeed}kt</p>
             <p>高度：${altitude}ft</p>
           `;
         if (flightPlan) {
             content += `
+                <p>机型: ${flightPlan.aircraft.split("-")[0]}</p>
                 <p>出发机场: ${flightPlan.departure}</p>
                 <p>到达机场: ${flightPlan.arrival}</p>
             `;
