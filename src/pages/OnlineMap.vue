@@ -136,6 +136,8 @@ watch(() => selectedLayer.value, (value: string, oldValue: string) => {
 
 const onlinePilots: Map<string, OnlinePilotModel> = new Map();
 const onlineController: Map<string, OnlineControllerModel> = new Map();
+const onlinePilotList: Ref<OnlinePilotModel[]> = ref([]);
+const onlineControllerList: Ref<OnlineControllerModel[]> = ref([]);
 
 const fetchWhazzupData = async () => {
     const data = await ApiClient.getOnlineClient();
@@ -150,6 +152,7 @@ const fetchWhazzupData = async () => {
                 onlinePilots.delete(pilot.callsign)
             }
         });
+        onlinePilotList.value = onlinePilots.values().toArray();
         const controllers = new Set();
         data.controllers.forEach(controller => {
             controllers.add(controller.callsign)
@@ -160,6 +163,7 @@ const fetchWhazzupData = async () => {
                 onlineController.delete(controller.callsign)
             }
         });
+        onlineControllerList.value = onlineController.values().toArray();
     }
 }
 
@@ -811,7 +815,7 @@ onUnmounted(() => {
         </div>
         <Transition name="online">
             <div class="left-box" v-if="showDetailList">
-                <el-table :data="onlinePilots.values().toArray()" height="100%" class="data-table">
+                <el-table :data="onlinePilotList" height="100%" class="data-table">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
@@ -834,7 +838,7 @@ onUnmounted(() => {
         </Transition>
         <Transition name="online">
             <div class="right-box" v-if="showDetailList">
-                <el-table :data="onlineController.values().toArray()" height="100%" class="data-table">
+                <el-table :data="onlineControllerList" height="100%" class="data-table">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
