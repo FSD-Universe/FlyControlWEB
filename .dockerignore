@@ -1,6 +1,8 @@
 .idea/
 .git/
 dist/
+public/config.json
+public/home.json
 node_modules/
 .gitignore
 auto-imports.d.ts
