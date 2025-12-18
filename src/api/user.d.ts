@@ -47,6 +47,7 @@ type RegisterData = {
     password: string;
     confirmPassword: string;
     username: string;
+    agreePrivacy: boolean;
 }
 
 type HistoryModel = {

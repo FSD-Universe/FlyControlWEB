@@ -8,11 +8,14 @@ import ApiUser from "@/api/user.js";
 import Api from "@/api/utils.js";
 import type {SendEmailButtonInterface} from "@/components/SendEmailButton.js";
 import SendEmailButton from "@/components/SendEmailButton.vue";
-import config from "@/config/index.js";
+import config, {privatePolicy} from "@/config/index.js";
 import {useUserStore} from "@/store/user.js";
 import {useServerConfigStore} from "@/store/server_config.js";
 import {showError, showSuccess} from "@/utils/message.js";
 import {formatCid} from "@/utils/utils.js";
+import DOMPurify from "dompurify";
+import {marked} from "marked";
+import {useReactiveWidth} from "@/composables/useReactiveWidth.js";
 
 const serverConfig = useServerConfigStore();
 const userStore = useUserStore();
@@ -25,7 +28,8 @@ const registerForm = reactive<RegisterData>({
     email_code: "",
     username: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    agreePrivacy: false
 })
 
 const rules = reactive<FormRules>({
@@ -61,6 +65,19 @@ const rules = reactive<FormRules>({
                 }
             },
             trigger: "blur"
+        }
+    ],
+    agreePrivacy: [
+        {
+            required: true,
+            validator: (_, value: boolean, callback: Callback1<string | undefined>) => {
+                if (!value) {
+                    callback("请阅读并同意隐私政策");
+                } else {
+                    callback();
+                }
+            },
+            trigger: "change"
         }
     ]
 })
@@ -122,11 +139,19 @@ const sendEmailCode = async (callback: Callback1<boolean>) => {
     }
 }
 
+const privacyPolicy = ref(false);
+
+const openPrivacyPolicy = () => {
+    privacyPolicy.value = true;
+}
+
 onBeforeMount(async () => {
     if (userStore.isLogin) {
         await router.push("/home");
     }
 })
+
+const {less1000px} = useReactiveWidth();
 </script>
 
 <template>
@@ -171,6 +196,11 @@ onBeforeMount(async () => {
                     <el-input v-model="registerForm.confirmPassword" type="password"
                               placeholder="请确认密码" :prefix-icon="Lock" show-password class="custom-input"/>
                 </el-form-item>
+                <el-form-item prop="agreePrivacy">
+                    <el-checkbox v-model="registerForm.agreePrivacy" class="privacy-checkbox">
+                        我已阅读并同意<a href="javascript:void(0)" @click="openPrivacyPolicy" class="privacy-link">《隐私政策》</a>
+                    </el-checkbox>
+                </el-form-item>
                 <el-form-item>
                     <el-button type="primary" @click="handleRegister" :loading="loading" class="register-button">
                         注册
@@ -182,9 +212,57 @@ onBeforeMount(async () => {
             </div>
         </el-card>
     </div>
+    <el-dialog v-model="privacyPolicy"
+               title="隐私政策"
+               :close-on-click-modal="false"
+               :close-on-press-escape="false"
+               :show-close="false"
+               :width="less1000px ? '100%' : '80%'"
+    >
+        <div v-html="DOMPurify.sanitize(marked.parse(privatePolicy))" class="content"/>
+        <div class="footer">
+            <el-button @click="privacyPolicy = false;registerForm.agreePrivacy = true" type="primary">
+                我已阅读并同意隐私政策
+            </el-button>
+        </div>
+    </el-dialog>
 </template>
 
 <style scoped>
+.content {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    font-family: '微软雅黑', "Lato", Helvetica, "Roboto", Arial, sans-serif;
+}
+
+.content :deep(p) {
+    margin: 5px 0;
+}
+
+.content :deep(table) {
+    border-collapse: collapse;
+    border: 1px solid black;
+}
+
+.content :deep(th),
+.content :deep(td) {
+    padding: 5px;
+    border: 1px solid black;
+}
+
+.content :deep(ul),
+.content :deep(ol) {
+    margin-left: 20px;
+}
+
+.footer {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .register-container {
     display: flex;
     justify-content: center;
@@ -288,6 +366,20 @@ onBeforeMount(async () => {
 .register-link:hover {
     color: var(--accent-color);
     text-decoration: underline #409eff solid 1px;
+}
+
+.privacy-checkbox {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.privacy-link {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.privacy-link:hover {
+    text-decoration: underline;
 }
 
 @media (max-width: 480px) {
