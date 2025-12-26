@@ -16,6 +16,7 @@ import {ApplicationStatus, Global, Ratings} from "@/global.js";
 import {useUserStore} from "@/store/user.js";
 import {showError, showInfo, showSuccess} from "@/utils/message.js";
 import {useReactiveWidth} from "@/composables/useReactiveWidth.js";
+import config from "@/config/index.js";
 
 const userStore = useUserStore();
 const router = useRouter();
@@ -47,8 +48,12 @@ const getSelfApplication = async () => {
 }
 
 let timeoutHandler: Nullable<number> = null;
+const showCloseDialog = ref(!config.application)
 
 onMounted(async () => {
+    if (!config.application) {
+        return;
+    }
     if (userStore.userData.rating >= Ratings.Observer) {
         showInfo("你已是管制员，正在跳转至管制员档案");
         timeoutHandler = setTimeout(async () => await router.push("/controllers/profile"), 3000);
@@ -167,7 +172,8 @@ const {less400px} = useReactiveWidth();
                 <el-step title="很遗憾, 您的申请未通过" v-if="application?.status == ApplicationStatus.Rejected"
                          :icon="CircleClose" status="error">
                     <template #description>
-                        <el-button type="primary" round @click="openApplicationDialog()">
+                        <el-button type="primary" round @click="openApplicationDialog()"
+                                   :disabled="!config.application">
                             重新提交申请
                         </el-button>
                     </template>
@@ -176,7 +182,7 @@ const {less400px} = useReactiveWidth();
             <el-space :class="{'justify-content-center': !less400px}"
                       v-if="application?.status < ApplicationStatus.Passed">
                 <el-button type="danger" round @click="confirmCancelDialogRef?.show()">取消申请</el-button>
-                <el-button type="primary" round @click="openApplicationDialog()"
+                <el-button type="primary" round @click="openApplicationDialog()" :disabled="!config.application"
                            v-if="less400px && application?.status == ApplicationStatus.Rejected">
                     重新提交申请
                 </el-button>
@@ -184,7 +190,8 @@ const {less400px} = useReactiveWidth();
             <ApplicationDescription :application="application"/>
         </el-space>
         <el-empty v-else description="看来你还没有提交过管制员申请">
-            <el-button type="primary" @click="openApplicationDialog()">立刻提交</el-button>
+            <el-button type="primary" @click="openApplicationDialog()" :disabled="!config.application">立刻提交
+            </el-button>
         </el-empty>
     </el-card>
     <FormDialog ref="applicationDialogRef" title="提交管制员申请" :width="800"
@@ -229,7 +236,33 @@ const {less400px} = useReactiveWidth();
                    body-content="确认取消申请吗？"
                    header-content="取消管制员申请"
                    @confirm-event="cancelApplication"/>
+    <el-dialog title="管制员申请通道暂时关闭"
+               v-model="showCloseDialog"
+               :close-on-press-escape="false"
+               :close-on-click-modal="false"
+               :show-close="false"
+               :width="800">
+        <div class="announcement">
+            <span>由于新招收管制学员过多，管制员训练部暂时无法继续接受新管制员的申请与培训工作。</span>
+            <span>即日起，暂时关闭管制员申请通道，下次开放时间请留意群内公告信息。</span>
+        </div>
+        <div class="announcement-footer">
+            <el-button type="primary" @click="router.back()">关闭</el-button>
+        </div>
+    </el-dialog>
 </template>
 
 <style scoped>
+.announcement {
+    font-size: 1.1rem;
+    line-height: 1.5;
+    margin: 5px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.announcement-footer {
+    display: flex;
+    justify-content: flex-end;
+}
 </style>

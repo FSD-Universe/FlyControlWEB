@@ -11,7 +11,7 @@ COPY . .
 
 RUN npm run build
 
-FROM nginx:1.29.3 as runtime
+FROM nginx:1.29.3 AS runtime
 
 COPY --from=builder /workspace/dist /usr/share/nginx/html
 

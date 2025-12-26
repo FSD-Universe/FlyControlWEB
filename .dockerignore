@@ -3,6 +3,8 @@
 dist/
 public/config.json
 public/home.json
+public/data/files
+public/images/partner
 node_modules/
 .gitignore
 auto-imports.d.ts

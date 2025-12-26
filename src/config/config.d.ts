@@ -3,6 +3,8 @@ type Config = {
     title: string;
     backend_url: string;
     mapbox_token: string;
+    project_id: string;
+    application: boolean;
     flight_path_color: string;
     atc_border: string,
     atc_fill: string,

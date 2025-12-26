@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@microsoft/clarity": "^1.0.2",
     "@vueuse/core": "^14.0.0-beta.1",
     "axios": "^1.11.0",
     "dompurify": "^3.2.7",

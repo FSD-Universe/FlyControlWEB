@@ -3,6 +3,7 @@ import {onMounted, ref} from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import {Global} from "@/global.js";
 import {Check} from "@element-plus/icons-vue";
+import CookieConsent from "@/components/CookieConsent.vue";
 
 const currentLocale = ref(zhCn)
 const currentVersion = ref('')
@@ -38,6 +39,7 @@ onMounted(() => {
             <el-button type="primary" :icon="Check" @click="showVersionDialog = false">确认</el-button>
         </template>
     </el-dialog>
+    <CookieConsent/>
 </template>
 
 <style scoped>
