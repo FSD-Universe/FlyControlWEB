@@ -6,6 +6,11 @@
     "application": false,
     "mapbox_token": "",
     "flight_path_color": "#ff4081",
+    "flight_path_color_start": 50,
+    "flight_path_color_end": 280,
+    "flight_path_color_reverse": false,
+    "flight_path_min_altitude": 0,
+    "flight_path_max_altitude": 41100,
     "atc_border": "rgba(26, 255, 0, 0.7)",
     "atc_fill": "rgba(222, 201, 93, 0.5)",
     "facilities": [

@@ -494,13 +494,7 @@ onMounted(async () => {
     });
 
     lineLayer = new VectorLayer({
-        source: new VectorSource(),
-        style: new Style({
-            stroke: new Stroke({
-                color: config.flight_path_color,
-                width: 3
-            })
-        })
+        source: new VectorSource()
     });
 
     aircraftLayer = new VectorLayer({
@@ -665,11 +659,79 @@ const drawLine = async (callsign: string) => {
         fromLonLat([point.longitude, point.latitude])
     );
 
-    lineFeature = new Feature({geometry: new LineString(coordinates)});
+    // 创建线段特征，根据高度设置颜色
+    const lineString = new LineString(coordinates);
+    lineFeature = new Feature({
+        geometry: lineString
+    });
+
+    // 根据高度创建渐变样式
+    const altitudeValues = pointsData.map(point => point.altitude);
+
+    // 为线段设置样式函数，根据高度变化颜色
+    lineFeature.setStyle((feature, _) => {
+        // 获取线段的坐标点
+        const geometry = feature.getGeometry();
+        if (geometry instanceof LineString) {
+            const coordinates = geometry.getCoordinates();
+            const styles = [];
+
+            // 为每一段线段设置颜色，颜色基于高度变化
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                const startCoord = coordinates[i];
+                const endCoord = coordinates[i + 1];
+
+                // 获取对应点的高度
+                const startAltitude = pointsData[i]?.altitude || 0;
+
+                // 计算颜色（基于高度）
+                const startColor = altitudeToColor(startAltitude);
+
+                // 创建线段样式
+                const segmentStyle = new Style({
+                    geometry: new LineString([startCoord, endCoord]),
+                    stroke: new Stroke({
+                        color: startColor,
+                        width: 3
+                    })
+                });
+
+                styles.push(segmentStyle);
+            }
+
+            return styles;
+        }
+
+        // 默认样式
+        return new Style({
+            stroke: new Stroke({
+                color: config.flight_path_color,
+                width: 3
+            })
+        });
+    });
 
     lineLayer.getSource().addFeature(lineFeature);
 }
 
+const minAltitude = config.flight_path_min_altitude;
+const altitudeDiff = config.flight_path_max_altitude - minAltitude;
+
+const altitudeToColor = (altitude: number) => {
+    const ratio = Math.max(0, Math.min(1, (altitude - minAltitude) / altitudeDiff));
+
+    const diff = Math.abs(config.flight_path_color_end - config.flight_path_color_start);
+    let hue: number
+    if (config.flight_path_color_reverse) {
+        hue = config.flight_path_color_end - diff * ratio;
+    } else {
+        hue = config.flight_path_color_start + diff * ratio;
+    }
+    const saturation = 80; // 保持较高饱和度
+    const lightness = 50; // 适中的亮度
+
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
 
 const removeLine = () => {
     if (lineFeature == null) {

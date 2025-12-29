@@ -6,6 +6,11 @@ type Config = {
     project_id: string;
     application: boolean;
     flight_path_color: string;
+    flight_path_color_start: number;
+    flight_path_color_end: number;
+    flight_path_color_reverse: boolean;
+    flight_path_min_altitude: number;
+    flight_path_max_altitude: number;
     atc_border: string,
     atc_fill: string,
     facilities: string[];
