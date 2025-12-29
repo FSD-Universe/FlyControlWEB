@@ -1,6 +1,6 @@
 export const Global = {
-    version: "0.9.1",
-    whatsNew: "<p>1.为在线地图添加飞服范围显示</p><p>2.修复在线地图刷新频闪问题</p><p>3.修复在线地图在线列表顺序不固定问题</p><p>4.对管制员申请添加30小时的联飞时长限制</p><p>5.其他bug修复</p>",
+    version: "0.9.2",
+    whatsNew: "<p>优化连飞地图显示效果：</p><p>1.为飞机轨迹线添加更多色彩</p><p>2.重构航班与管制员信息展示框</p>",
     controllerRecordTypes: [
         {
             label: "面试",

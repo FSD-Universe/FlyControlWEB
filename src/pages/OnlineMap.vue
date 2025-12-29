@@ -33,6 +33,8 @@ import ApiClient from "@/api/client.js";
 import {useUserStore} from "@/store/user.js";
 import AxiosXHR = Axios.AxiosXHR;
 import ImageLayer from "ol/layer/Image.js";
+import moment from "moment";
+import {padStart} from "lodash-es";
 
 const serverConfigStore = useServerConfigStore();
 const userStore = useUserStore();
@@ -120,7 +122,6 @@ const layers = {
 const mapContainer = ref<HTMLElement>();
 const map = ref<OlMap | null>(null);
 const selectedFeature = ref<Feature | null>(null);
-const popup = ref<Overlay>();
 const popupContent = ref<string>('');
 const selectedLayer = ref("GaoDe");
 const mapBoxAvailable = ref(false)
@@ -234,6 +235,8 @@ const updatePilotInfo = (pilot: OnlinePilotModel, feature: Feature) => {
     feature.set('groundSpeed', pilot.ground_speed);
     feature.set('altitude', pilot.altitude);
     feature.set('transponder', pilot.transponder);
+    feature.set('online_time', pilot.logon_time);
+    feature.set('heading', pilot.heading);
     feature.setStyle(createStyle(pilot.heading));
 }
 
@@ -247,6 +250,9 @@ const updateControllerInfo = (controller: OnlineControllerModel, feature: Featur
     feature.set("cid", controller.cid);
     feature.set("offline_time", controller.offline_time);
     feature.set("is_break", controller.is_break);
+    feature.set("facility", controller.facility);
+    feature.set("rating", controller.rating);
+    feature.set("online_time", controller.logon_time);
 }
 
 const flushMapShow = () => {
@@ -268,7 +274,9 @@ const flushMapShow = () => {
                 flightPlan: pilot.flight_plan,
                 groundSpeed: pilot.ground_speed,
                 altitude: pilot.altitude,
-                transponder: pilot.transponder
+                transponder: pilot.transponder,
+                online_time: pilot.logon_time,
+                heading: pilot.heading
             });
             feature.setId(pilotId);
             feature.setStyle(createStyle(pilot.heading));
@@ -403,7 +411,10 @@ const flushMapShow = () => {
                 offline_time: controller.offline_time,
                 is_break: controller.is_break,
                 atis: controller.atc_info,
-                cid: formatCid(controller.cid)
+                cid: formatCid(controller.cid),
+                online_time: controller.logon_time,
+                rating: controller.rating,
+                facility: controller.facility
             });
             feature.setId(controllerId);
             feature.setStyle(new Style({
@@ -625,9 +636,6 @@ onMounted(async () => {
     map.value.addLayer(towerLayer);
     // map.value.addLayer(imageLayer);
 
-    // 初始化弹出框
-    initializePopup();
-
     // 添加点击事件处理
     setupClickHandler();
 
@@ -664,9 +672,6 @@ const drawLine = async (callsign: string) => {
     lineFeature = new Feature({
         geometry: lineString
     });
-
-    // 根据高度创建渐变样式
-    const altitudeValues = pointsData.map(point => point.altitude);
 
     // 为线段设置样式函数，根据高度变化颜色
     lineFeature.setStyle((feature, _) => {
@@ -742,27 +747,6 @@ const removeLine = () => {
     lineFeature = null;
 }
 
-// 初始化弹出框
-const initializePopup = () => {
-    if (!map.value) return;
-
-    const popupElement = document.getElementById('popup');
-    if (!popupElement) return;
-
-    popup.value = new Overlay({
-        element: popupElement,
-        positioning: 'top-right',
-        offset: [-10, 0],
-        autoPan: {
-            animation: {
-                duration: 250
-            }
-        }
-    });
-
-    map.value?.addOverlay(popup.value);
-};
-
 // 设置点击事件处理
 const setupClickHandler = () => {
     if (!map.value) return;
@@ -779,7 +763,7 @@ const setupClickHandler = () => {
 
         if (feature) {
             // 显示弹出框
-            showPopup(feature, event.coordinate);
+            showPopup(feature);
             const isPilot = feature.get("isPilot") as boolean;
             if (isPilot) {
                 await drawLine(feature.get("callsign") as string);
@@ -793,68 +777,99 @@ const setupClickHandler = () => {
     });
 };
 
-// 显示弹出框
-const showPopup = (feature: Feature, coordinate: number[]) => {
-    if (!popup.value) return;
+const showPilotDetail = ref(false);
+type PilotData = {
+    callsign: string,
+    cid: string,
+    heading: number,
+    groundSpeed: number,
+    altitude: number,
+    transponder: string,
+    online_time: string,
+    flightPlan: Nullable<FlightPlanModel>
+}
+const pilotData: Ref<PilotData> = ref({
+    callsign: 'CES2352',
+    cid: '2352',
+    flightPlan: null,
+    groundSpeed: 0,
+    altitude: 0,
+    transponder: '2000',
+    heading: 0
+});
+const showATCDetail = ref(false);
+type ATCData = {
+    callsign: string,
+    frequyency: string,
+    cid: string,
+    infos: string[],
+    online_time: string,
+    is_break: boolean,
+    offline_time: string,
+    login_rating: string,
+    login_facility: string
+}
+const atcData: Ref<ATCData> = ref({
+    callsign: '',
+    frequyency: '',
+    cid: '',
+    infos: [],
+    online_time: '',
+    is_break: false,
+    offline_time: '',
+    login_rating: '',
+    login_facility: ''
+});
 
+// 显示弹出框
+const showPopup = (feature: Feature) => {
     const isPilot = feature.get("isPilot");
     if (isPilot == undefined) {
         return;
     }
 
     if (isPilot) {
-        const callsign = feature.get('callsign') as string;
-        const flightPlan = feature.get('flightPlan') as Nullable<FlightPlanModel>;
-        const groundSpeed = feature.get('groundSpeed') as number;
-        const altitude = feature.get('altitude') as number;
-        const transponder = feature.get('transponder') as string;
-        const cid = feature.get('cid') as string;
-
-        let content = `
-            <h3>${callsign}</h3>
-            <p>${formatCid(cid)}</p>
-            <p>应答机: ${transponder}</p>
-            <p>地速：${groundSpeed}kt</p>
-            <p>高度：${altitude}ft</p>
-          `;
-        if (flightPlan) {
-            content += `
-                <p>机型: ${flightPlan.aircraft.split("-")[0]}</p>
-                <p>出发机场: ${flightPlan.departure}</p>
-                <p>到达机场: ${flightPlan.arrival}</p>
-            `;
-        } else {
-            content += `<p>平等的看不起任何不交计划的人</p>`
-        }
-        popupContent.value = content;
+        pilotData.value.callsign = feature.get('callsign') as string;
+        pilotData.value.cid = feature.get('cid') as string;
+        pilotData.value.groundSpeed = feature.get('groundSpeed') as number;
+        pilotData.value.altitude = feature.get('altitude') as number;
+        pilotData.value.transponder = feature.get('transponder') as string;
+        pilotData.value.flightPlan = feature.get('flightPlan') as Nullable<FlightPlanModel>;
+        pilotData.value.online_time = moment.utc(feature.get("online_time") as string).local().format("YYYY-MM-DD HH:mm:ss");
+        pilotData.value.heading = feature.get('heading') as number;
+        showATCDetail.value = false;
+        showPilotDetail.value = true;
     } else {
-        const callsign = feature.get('callsign') as string;
-        const frequency = (Number(feature.get('frequency')) / 1000).toFixed(3);
-        const cid = feature.get('cid') as string;
-        const atcInfo = join(feature.get('atis') as string[], '<br/>');
-        const offline_time = feature.get("offline_time") as string;
-        const is_break = feature.get("is_break") as boolean;
-
-        popupContent.value = `
-        <h3>${callsign}</h3>
-        <p>频率: ${frequency}</p>
-        <p>CID: ${formatCid(cid)}</p>
-        <p>关扇时间: ${offline_time ? offline_time + 'Z' : '未提供'}</p>
-        <p>暂时离开: ${is_break ? '是' : '否'}</p>
-        <p>ATC-INFO: </p>
-        <p>${atcInfo}</p>
-        `
+        removeLine();
+        atcData.value.callsign = feature.get('callsign') as string;
+        atcData.value.frequyency = (Number(feature.get('frequency')) / 1000).toFixed(3);
+        atcData.value.cid = feature.get('cid') as string;
+        atcData.value.infos = feature.get('atis') as string[];
+        atcData.value.online_time = moment.utc(feature.get("online_time") as string).local().format("YYYY-MM-DD HH:mm:ss");
+        atcData.value.is_break = feature.get("is_break") as boolean;
+        let offlineTime = feature.get("offline_time") as string;
+        if (offlineTime == "") {
+            atcData.value.offline_time = "未提供预计下线时间";
+        } else {
+            offlineTime = padStart(offlineTime, 4, "0");
+            const time = moment.utc({
+                hour: parseInt(offlineTime.substring(0, 2)),
+                minute: parseInt(offlineTime.substring(2))
+            });
+            atcData.value.offline_time = time.local().format("YYYY-MM-DD HH:mm:ss");
+        }
+        atcData.value.login_rating = config.ratings[feature.get("rating") as number + 1].label;
+        atcData.value.login_facility = serverConfigStore.facilities[feature.get("facility") as number].short_name;
+        showPilotDetail.value = false;
+        showATCDetail.value = true;
     }
-
-    popup.value.setPosition(coordinate);
 };
 
 // 关闭弹出框
 const closePopup = () => {
-    if (popup.value) {
-        popup.value.setPosition(undefined);
-        removeLine();
-    }
+    showPilotDetail.value = false;
+    showATCDetail.value = false;
+    removeLine();
 };
 
 // 组件卸载时清理
@@ -866,6 +881,73 @@ onUnmounted(() => {
     clearInterval(interval);
 });
 
+const pilotRowClick = async (data: OnlinePilotModel) => {
+    map.value?.getView().animate({
+        center: fromLonLat([data.longitude, data.latitude]),
+        zoom: 8,
+        duration: 1000
+    });
+    pilotData.value.callsign = data.callsign;
+    pilotData.value.cid = formatCid(data.cid);
+    pilotData.value.groundSpeed = data.ground_speed;
+    pilotData.value.altitude = data.altitude;
+    pilotData.value.transponder = data.transponder;
+    pilotData.value.flightPlan = data.flight_plan;
+    pilotData.value.online_time = moment.utc(data.logon_time).local().format("YYYY-MM-DD HH:mm:ss");
+    pilotData.value.heading = data.heading;
+    showPilotDetail.value = true;
+    showATCDetail.value = false;
+    await drawLine(data.callsign);
+}
+
+const atcRowClick = (data: OnlineControllerModel) => {
+    removeLine();
+    let zoom: number;
+    switch (data.facility) {
+        case 1:
+            zoom = 4;
+            break;
+        case 6:
+            zoom = 6;
+            break;
+        case 5:
+            zoom = 8;
+            break;
+        case 4:
+        case 3:
+        case 2:
+            zoom = 10;
+            break;
+        default:
+            zoom = 8;
+    }
+    map.value?.getView().animate({
+        center: fromLonLat([data.longitude, data.latitude]),
+        zoom: zoom,
+        duration: 1000
+    });
+    atcData.value.callsign = data.callsign;
+    atcData.value.frequyency = (data.frequency / 1000).toFixed(3);
+    atcData.value.cid = formatCid(data.cid);
+    atcData.value.infos = data.atc_info;
+    atcData.value.online_time = moment.utc(data.logon_time).local().format("YYYY-MM-DD HH:mm:ss");
+    atcData.value.is_break = data.is_break;
+    let offlineTime = data.offline_time;
+    if (offlineTime == "") {
+        atcData.value.offline_time = "未提供预计下线时间";
+    } else {
+        offlineTime = padStart(offlineTime, 4, "0");
+        const time = moment.utc({
+            hour: parseInt(offlineTime.substring(0, 2)),
+            minute: parseInt(offlineTime.substring(2))
+        });
+        atcData.value.offline_time = time.local().format("YYYY-MM-DD HH:mm:ss");
+    }
+    atcData.value.login_rating = config.ratings[data.rating + 1].label;
+    atcData.value.login_facility = serverConfigStore.facilities[data.facility].short_name;
+    showPilotDetail.value = false;
+    showATCDetail.value = true;
+}
 </script>
 
 <template>
@@ -892,7 +974,7 @@ onUnmounted(() => {
         </div>
         <Transition name="online">
             <div class="left-box" v-if="showDetailList">
-                <el-table :data="onlinePilotList" height="100%" class="data-table">
+                <el-table :data="onlinePilotList" height="100%" class="data-table" @row-click="pilotRowClick">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
@@ -915,7 +997,7 @@ onUnmounted(() => {
         </Transition>
         <Transition name="online">
             <div class="right-box" v-if="showDetailList">
-                <el-table :data="onlineControllerList" height="100%" class="data-table">
+                <el-table :data="onlineControllerList" height="100%" class="data-table" @row-click="atcRowClick">
                     <el-table-column label="呼号" prop="callsign"/>
                     <el-table-column label="CID">
                         <template #default="scope">
@@ -948,10 +1030,229 @@ onUnmounted(() => {
                 </el-table>
             </div>
         </Transition>
+        <Transition name="detail">
+            <div class="detail-form" v-if="showPilotDetail">
+                <div class="base-info">
+                    <span class="callsign">{{ pilotData.callsign }}</span>
+                    <div class="info-item">
+                        <span class="label">飞行员:</span>
+                        <span class="value">{{ pilotData.cid }}</span>
+                    </div>
+                    <div class="info-item" v-if="pilotData.flightPlan != null">
+                        <span class="label">执飞机型:</span>
+                        <span class="value">{{ pilotData.flightPlan.aircraft.split("-")[0] }}</span>
+                    </div>
+                </div>
+                <div class="flight-plan-info">
+                    <div class="info-item error" v-if="pilotData.flightPlan == null">
+                        <span class="title">未找到飞行计划, 请提交飞行计划</span>
+                        <span class="value">平等的看不起任何不交计划的人</span>
+                    </div>
+                    <div v-else>
+                        <div class="info-item">
+                            <span class="label">离场机场:</span>
+                            <span class="value">{{ pilotData.flightPlan?.departure }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">到达机场:</span>
+                            <span class="value">{{ pilotData.flightPlan?.arrival }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">备降场:</span>
+                            <span class="value">{{
+                                    pilotData.flightPlan?.alternate == '' ? '无' : pilotData.flightPlan?.alternate
+                                }}</span>
+                        </div>
+                        <div class="info-item route">
+                            <span class="label">航路:</span>
+                            <span class="value">{{ pilotData.flightPlan?.route }}</span>
+                        </div>
+                        <div class="info-item route">
+                            <span class="label">备注:</span>
+                            <span class="value">{{ pilotData.flightPlan?.remarks }}</span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">地速:</span>
+                        <span class="value">{{ pilotData.groundSpeed }} kts</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">高度:</span>
+                        <span class="value">{{ pilotData.altitude }} ft</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">朝向:</span>
+                        <span class="value">{{ pilotData.heading }}°</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">应答机:</span>
+                        <span class="value"
+                              :class="{'color-red': pilotData.transponder == '7700' || pilotData.transponder == '7600' || pilotData.transponder == '7500'}">
+                            {{ pilotData.transponder }}
+                        </span>
+                    </div>
+                </div>
+                <div class="extra-info">
+                    <div class="info-item">
+                        <span class="label">上线时间:</span>
+                        <span class="value">{{ pilotData.online_time }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-form" v-else-if="showATCDetail">
+                <div class="base-info">
+                    <span class="callsign">{{ atcData.callsign }}</span>
+                    <span v-if="atcData.is_break">🔴</span>
+                    <span v-else>🟢</span>
+                    <div class="info-item">
+                        <span class="label">频率:</span>
+                        <span class="value">{{ atcData.frequyency }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">管制员:</span>
+                        <span class="value">{{ atcData.cid }}</span>
+                    </div>
+                </div>
+                <div class="atc-info">
+                    <p class="label">ATC INFO:</p>
+                    <p class="value" v-for="item in atcData.infos">
+                        {{ item }}
+                    </p>
+                </div>
+                <div class="extra-info">
+                    <div class="info-item">
+                        <span class="label">上线时间:</span>
+                        <span class="value">{{ atcData.online_time }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">预计下线时间:</span>
+                        <span class="value">{{ atcData.offline_time }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">登录权限:</span>
+                        <span class="value">{{ atcData.login_rating }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">席位:</span>
+                        <span class="value">{{ atcData.login_facility }}</span>
+                    </div>
+                </div>
+            </div>
+            <div v-else/>
+        </Transition>
     </div>
 </template>
 
 <style scoped>
+.detail-form {
+    position: absolute;
+    top: 4em;
+    right: .5em;
+    width: 300px;
+    background-color: var(--el-bg-color-overlay);
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--el-border-color-light);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.detail-form .info-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.detail-form .info-item:last-child {
+    margin-bottom: 0;
+}
+
+.detail-form .label {
+    color: var(--el-text-color-secondary);
+    font-weight: 500;
+    min-width: 70px;
+    text-align: left;
+}
+
+.detail-form .value {
+    color: var(--el-text-color-primary);
+    font-weight: 600;
+    text-align: right;
+    flex: 1;
+    word-break: break-all;
+}
+
+.base-info, .flight-plan-info, .extra-info, .atc-info {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.base-info:last-child, .flight-plan-info:last-child, .extra-info:last-child, .atc-info:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.route {
+    display: flex;
+    flex-direction: column;
+
+    .value {
+        text-align: left;
+    }
+}
+
+.error {
+    display: flex;
+    flex-direction: column;
+
+    .title, .value {
+        margin: 0;
+        text-align: left;
+    }
+
+    .title {
+        color: #ff7365;
+    }
+
+    .value {
+        color: var(--el-bg-color-overlay);
+    }
+
+    .value:hover {
+        color: var(--el-text-color-primary);
+    }
+}
+
+.callsign {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.atc-info .value {
+    text-align: left;
+}
+
+.detail-enter-from,
+.detail-leave-to {
+    opacity: 0;
+    transform: translateZ(-100px);
+}
+
+.detail-enter-active,
+.detail-leave-active {
+    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+}
+
+.detail-enter-to,
+.detail-leave-from {
+    opacity: 1;
+    transform: translateZ(0);
+}
+
 .online-enter-from,
 .online-leave-to {
     opacity: 0;
