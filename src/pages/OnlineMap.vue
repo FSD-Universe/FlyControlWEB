@@ -237,6 +237,7 @@ const updatePilotInfo = (pilot: OnlinePilotModel, feature: Feature) => {
     feature.set('transponder', pilot.transponder);
     feature.set('online_time', pilot.logon_time);
     feature.set('heading', pilot.heading);
+    feature.set("real_name", pilot.real_name);
     feature.setStyle(createStyle(pilot.heading));
 }
 
@@ -253,6 +254,7 @@ const updateControllerInfo = (controller: OnlineControllerModel, feature: Featur
     feature.set("facility", controller.facility);
     feature.set("rating", controller.rating);
     feature.set("online_time", controller.logon_time);
+    feature.set("real_name", controller.real_name);
 }
 
 const flushMapShow = () => {
@@ -276,7 +278,8 @@ const flushMapShow = () => {
                 altitude: pilot.altitude,
                 transponder: pilot.transponder,
                 online_time: pilot.logon_time,
-                heading: pilot.heading
+                heading: pilot.heading,
+                real_name: pilot.real_name
             });
             feature.setId(pilotId);
             feature.setStyle(createStyle(pilot.heading));
@@ -414,7 +417,8 @@ const flushMapShow = () => {
                 cid: formatCid(controller.cid),
                 online_time: controller.logon_time,
                 rating: controller.rating,
-                facility: controller.facility
+                facility: controller.facility,
+                real_name: controller.real_name
             });
             feature.setId(controllerId);
             feature.setStyle(new Style({
@@ -786,6 +790,8 @@ type PilotData = {
     altitude: number,
     transponder: string,
     online_time: string,
+    real_name: string,
+    home_airport: string,
     flightPlan: Nullable<FlightPlanModel>
 }
 const pilotData: Ref<PilotData> = ref({
@@ -795,7 +801,9 @@ const pilotData: Ref<PilotData> = ref({
     groundSpeed: 0,
     altitude: 0,
     transponder: '2000',
-    heading: 0
+    heading: 0,
+    real_name: '',
+    home_airport: 'ZGHA'
 });
 const showATCDetail = ref(false);
 type ATCData = {
@@ -807,7 +815,8 @@ type ATCData = {
     is_break: boolean,
     offline_time: string,
     login_rating: string,
-    login_facility: string
+    login_facility: string,
+    real_name: string
 }
 const atcData: Ref<ATCData> = ref({
     callsign: '',
@@ -818,7 +827,8 @@ const atcData: Ref<ATCData> = ref({
     is_break: false,
     offline_time: '',
     login_rating: '',
-    login_facility: ''
+    login_facility: '',
+    real_name: ''
 });
 
 // 显示弹出框
@@ -837,6 +847,14 @@ const showPopup = (feature: Feature) => {
         pilotData.value.flightPlan = feature.get('flightPlan') as Nullable<FlightPlanModel>;
         pilotData.value.online_time = moment.utc(feature.get("online_time") as string).local().format("YYYY-MM-DD HH:mm:ss");
         pilotData.value.heading = feature.get('heading') as number;
+        const infos = (feature.get("real_name") as string).split(" ");
+        if (infos.length == 1) {
+            pilotData.value.real_name = infos[0];
+            pilotData.value.home_airport = '未提供';
+        } else {
+            pilotData.value.real_name = infos.slice(0, infos.length - 1).join(" ");
+            pilotData.value.home_airport = infos[infos.length - 1];
+        }
         showATCDetail.value = false;
         showPilotDetail.value = true;
     } else {
@@ -860,6 +878,7 @@ const showPopup = (feature: Feature) => {
         }
         atcData.value.login_rating = config.ratings[feature.get("rating") as number + 1].label;
         atcData.value.login_facility = serverConfigStore.facilities[feature.get("facility") as number].short_name;
+        atcData.value.real_name = feature.get('real_name') as string;
         showPilotDetail.value = false;
         showATCDetail.value = true;
     }
@@ -895,6 +914,14 @@ const pilotRowClick = async (data: OnlinePilotModel) => {
     pilotData.value.flightPlan = data.flight_plan;
     pilotData.value.online_time = moment.utc(data.logon_time).local().format("YYYY-MM-DD HH:mm:ss");
     pilotData.value.heading = data.heading;
+    const infos = data.real_name.split(" ");
+    if (infos.length == 1) {
+        pilotData.value.real_name = infos[0];
+        pilotData.value.home_airport = '未提供';
+    } else {
+        pilotData.value.real_name = infos.slice(0, infos.length - 1).join(" ");
+        pilotData.value.home_airport = infos[infos.length - 1];
+    }
     showPilotDetail.value = true;
     showATCDetail.value = false;
     await drawLine(data.callsign);
@@ -945,6 +972,7 @@ const atcRowClick = (data: OnlineControllerModel) => {
     }
     atcData.value.login_rating = config.ratings[data.rating + 1].label;
     atcData.value.login_facility = serverConfigStore.facilities[data.facility].short_name;
+    atcData.value.real_name = data.real_name;
     showPilotDetail.value = false;
     showATCDetail.value = true;
 }
@@ -953,9 +981,6 @@ const atcRowClick = (data: OnlineControllerModel) => {
 <template>
     <div class="map-wrapper">
         <div ref="mapContainer" id="map" class="map-container"></div>
-        <div id="popup" class="ol-popup">
-            <div id="popup-content" v-html="popupContent"></div>
-        </div>
         <div class="ol-switch">
             <el-radio-group v-model="selectedLayer" class="map-selector">
                 <el-radio value="OSM" label="OSM地图"/>
@@ -1038,6 +1063,14 @@ const atcRowClick = (data: OnlineControllerModel) => {
                         <span class="label">飞行员:</span>
                         <span class="value">{{ pilotData.cid }}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="label">名称:</span>
+                        <span class="value">{{ pilotData.real_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">基地机场:</span>
+                        <span class="value">{{ pilotData.home_airport }}</span>
+                    </div>
                     <div class="info-item" v-if="pilotData.flightPlan != null">
                         <span class="label">执飞机型:</span>
                         <span class="value">{{ pilotData.flightPlan.aircraft.split("-")[0] }}</span>
@@ -1111,6 +1144,10 @@ const atcRowClick = (data: OnlineControllerModel) => {
                     <div class="info-item">
                         <span class="label">管制员:</span>
                         <span class="value">{{ atcData.cid }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">名称:</span>
+                        <span class="value">{{ atcData.real_name }}</span>
                     </div>
                 </div>
                 <div class="atc-info">
@@ -1353,24 +1390,5 @@ const atcRowClick = (data: OnlineControllerModel) => {
     position: absolute;
     top: .5em;
     left: .5em;
-}
-
-.ol-popup {
-    background-color: var(--el-bg-color-overlay);
-    position: absolute;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #ccc;
-    min-width: 200px;
-    box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.ol-popup-closer {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    text-decoration: none;
-    color: #333;
-    font-size: 1.2em;
 }
 </style>
