@@ -41,6 +41,8 @@ type OnlineClientModel = {
 
 type FlightPathPoint = {
     latitude: number;
-    longitude: number,
-    altitude: number
+    longitude: number;
+    altitude: number;
+    ground_speed: number;
+    timestamp: number;
 }

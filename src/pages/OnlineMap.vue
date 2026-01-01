@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted, ref, Ref, watch} from 'vue';
+import {computed, ComputedRef, onMounted, onUnmounted, ref, Ref, watch, watchEffect} from 'vue';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -8,9 +8,8 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import {fromLonLat, transformExtent} from 'ol/proj';
+import {fromLonLat} from 'ol/proj';
 import {Circle, Fill, Icon, Stroke, Style} from 'ol/style';
-import Overlay from 'ol/Overlay';
 import axios from "axios";
 import 'ol/ol.css';
 import {Layer} from "ol/layer.js";
@@ -24,7 +23,7 @@ import VectorTileSource from 'ol/source/VectorTile.js';
 import {TileGrid} from "ol/tilegrid.js";
 import {applyStyle} from 'ol-mapbox-style';
 import config from "@/config/index.js";
-import {ImageStatic, Source, XYZ} from "ol/source.js";
+import {Source, XYZ} from "ol/source.js";
 import {Cloudy, Expand} from "@element-plus/icons-vue";
 import {formatCid} from "@/utils/utils.js";
 import {useServerConfigStore} from "@/store/server_config.js";
@@ -32,9 +31,35 @@ import {useToggle} from "@vueuse/core";
 import ApiClient from "@/api/client.js";
 import {useUserStore} from "@/store/user.js";
 import AxiosXHR = Axios.AxiosXHR;
-import ImageLayer from "ol/layer/Image.js";
 import moment from "moment";
 import {padStart} from "lodash-es";
+
+import * as echarts from 'echarts/core';
+import {
+    TitleComponentOption,
+    TooltipComponent,
+    TooltipComponentOption,
+    GridComponent,
+    GridComponentOption,
+    DataZoomComponent,
+    DataZoomComponentOption
+} from 'echarts/components';
+import {LineChart, LineSeriesOption} from 'echarts/charts';
+import {CanvasRenderer} from 'echarts/renderers';
+import {EChartsType} from "echarts/core";
+
+echarts.use([TooltipComponent, GridComponent, DataZoomComponent, LineChart, CanvasRenderer]);
+
+type EChartsOption = echarts.ComposeOption<TitleComponentOption | TooltipComponentOption | GridComponentOption | DataZoomComponentOption | LineSeriesOption>;
+
+const chartDom = ref<HTMLDivElement>();
+const myChart: ComputedRef<Nullable<EChartsType>> = computed(() => {
+    if (chartDom.value) {
+        return echarts.init(chartDom.value)
+    }
+    return null;
+});
+let option: EChartsOption;
 
 const serverConfigStore = useServerConfigStore();
 const userStore = useUserStore();
@@ -122,7 +147,6 @@ const layers = {
 const mapContainer = ref<HTMLElement>();
 const map = ref<OlMap | null>(null);
 const selectedFeature = ref<Feature | null>(null);
-const popupContent = ref<string>('');
 const selectedLayer = ref("GaoDe");
 const mapBoxAvailable = ref(false)
 
@@ -486,6 +510,8 @@ const flushMapShow = () => {
 // const h = 2153;
 
 // let imageLayer = null;
+const showPilotDetail = ref(false);
+const showATCDetail = ref(false);
 // 初始化地图
 onMounted(async () => {
     if (!mapContainer.value) return;
@@ -654,7 +680,6 @@ onMounted(async () => {
     }, 15000)
 });
 
-
 const drawLine = async (callsign: string) => {
     if (lineFeature != null) {
         lineLayer.getSource().clear();
@@ -666,6 +691,29 @@ const drawLine = async (callsign: string) => {
         showError("获取飞行路径失败")
         return;
     }
+
+    const time = pointsData.map(point => moment.unix(point.timestamp).format("HH:mm:ss"));
+    const height = pointsData.map(point => point.altitude);
+    const speed = pointsData.map(point => point.ground_speed);
+
+    option = {
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {type: 'cross', animation: false, label: {backgroundColor: '#505765'}},
+            formatter: function (params: any) {
+                return params[0].axisValueLabel + '<br/>' + params[0].marker + params[0].seriesName + ': ' + params[0].data + ' ft<br/>' + params[1].marker + params[1].seriesName + ': ' + params[1].data + ' kts';
+            }
+        },
+        grid: {top: '50'},
+        xAxis: [{type: 'category', boundaryGap: false, axisLine: {onZero: false}, data: time}],
+        yAxis: [{type: 'value', name: '高度(ft)'}, {type: 'value', name: "地速(kts)"}],
+        dataZoom: [{show: true, realtime: true}, {type: 'inside', realtime: true}],
+        series: [
+            {type: 'line', name: '高度', yAxisIndex: 0, symbolSize: 0, data: height},
+            {type: 'line', name: "地速", yAxisIndex: 1, symbolSize: 0, data: speed}
+        ]
+    };
+    myChart.value?.setOption(option);
 
     const coordinates = pointsData.map(point =>
         fromLonLat([point.longitude, point.latitude])
@@ -781,7 +829,6 @@ const setupClickHandler = () => {
     });
 };
 
-const showPilotDetail = ref(false);
 type PilotData = {
     callsign: string,
     cid: string,
@@ -805,7 +852,6 @@ const pilotData: Ref<PilotData> = ref({
     real_name: '',
     home_airport: 'ZGHA'
 });
-const showATCDetail = ref(false);
 type ATCData = {
     callsign: string,
     frequyency: string,
@@ -896,6 +942,9 @@ onUnmounted(() => {
     if (map.value) {
         map.value.setTarget(undefined);
         map.value = null;
+    }
+    if (myChart.value) {
+        myChart.value.dispose();
     }
     clearInterval(interval);
 });
@@ -1131,6 +1180,7 @@ const atcRowClick = (data: OnlineControllerModel) => {
                         <span class="value">{{ pilotData.online_time }}</span>
                     </div>
                 </div>
+                <div ref="chartDom" style="width: 100%;height: 300px"/>
             </div>
             <div class="detail-form" v-else-if="showATCDetail">
                 <div class="base-info">
@@ -1193,6 +1243,8 @@ const atcRowClick = (data: OnlineControllerModel) => {
     backdrop-filter: blur(10px);
     border: 1px solid var(--el-border-color-light);
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    max-height: 500px;
+    overflow-y: auto;
 }
 
 .detail-form .info-item {
